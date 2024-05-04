@@ -5,11 +5,16 @@ import Base64ArrayBuffer from "base64-arraybuffer";
 import msgpack from "msgpack-lite";
 
 // CONSTANTS
+if (process.argv.length < 3) {
+    console.log("Usage: " + process.argv[0] + " " + process.argv[1] + " input.har [output (defaults to input.har.logs)]")
+    process.exit(0);
+}
+
 
 // input .har file
-const har_file = "./ribbon.har";
+const har_file = process.argv[2];
 // output folder
-const output_file = "./ribbon.log";
+const output_file = process.argv[3] ? process.argv[3] : process.argv[2] + ".logs"
 // har websocket index
 const index = 0;
 
@@ -40,42 +45,19 @@ if (!fsSync.existsSync(folder)) {
 
 await fs.writeFile(output_file, "");
 
-for (const socketMessage of data.log.entries[index]._webSocketMessages) {
-    const arrayBuffer = Base64ArrayBuffer.decode(socketMessage.data);
-    const buffer = Buffer.from(arrayBuffer);
+for (let index = 0; index < data.log.entries.length; ++index) {
 
-    // see Ribbon.md for more information on these headers.
-    
-    if (buffer[0] == 0x45) {
-        const message = msgpack.decode(buffer.slice(1));
-        await appendLog(socketMessage.time, socketMessage.type, message);
-    } else if (buffer[0] == 0xAE) {
-        const message = msgpack.decode(buffer.slice(5));
-        const view = new DataView(arrayBuffer);
-        const id = view.getUint32(1, false);
-        message.id = id;
-        await appendLog(socketMessage.time, socketMessage.type, message);
-    } else if (buffer[0] === 0x58) {
-        const items = [];
-        const lengths = [];
-        const view = new DataView(arrayBuffer);
-
-        for (let i = 0; true; i++) {
-            const length = view.getUint32(1 + (i * 4), false);
-            if (length === 0) {
-                break;
-            }
-            lengths.push(length);
-        }
-
-        let pointer = 0;
-        for (let i = 0; i < lengths.length; i++) {
-            items.push(buffer.slice(1 + (lengths.length * 4) + 4 + pointer, 1 + (lengths.length * 4) + 4 + pointer + lengths[i]));
-            pointer += lengths[i];
-        }
-
-        for (const message of items) {
-            await appendLog(socketMessage.time, socketMessage.type, message);
-        }
+    if(!("_webSocketMessages" in data.log.entries[index])) {
+        continue;
     }
+
+    await fs.appendFile(output_file, `WebSocket from log entries at index ${index}`);
+
+    for (const socketMessage of data.log.entries[index]._webSocketMessages) {
+        const arrayBuffer = Base64ArrayBuffer.decode(socketMessage.data);
+        const buffer = Buffer.from(arrayBuffer);
+
+        // see Ribbon.md for more information on these headers.
+
 }
+    }
